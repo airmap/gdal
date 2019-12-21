@@ -6,6 +6,7 @@
 #include "_cgo_export.h"
 
 #include <cpl_conv.h>
+#include <cpl_error.h>
 
 static int goGDALProgressFuncProxyB_(
 	double complete, 
@@ -17,8 +18,16 @@ static int goGDALProgressFuncProxyB_(
 	return (int)returnVal;
 }
 
+static void errorHandler(CPLErr err, CPLErrorNum num, const char* s) {
+	cplErrorHandler(err, num, (char*)s);
+}
+
 GDALProgressFunc goGDALProgressFuncProxyB() {
 	return goGDALProgressFuncProxyB_;
+}
+
+CPLErrorHandler goCPLErrorHandlerProxy() {
+	return errorHandler;
 }
 
 
