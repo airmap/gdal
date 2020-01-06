@@ -14,13 +14,30 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
-var _ = fmt.Println
+var (
+	_ = fmt.Println
+
+	errorHandler            atomic.Value
+	installErrorHandlerOnce sync.Once
+)
 
 func init() {
 	C.GDALAllRegister()
+}
+
+//export cplErrorHandler
+func cplErrorHandler(err C.CPLErr, num C.CPLErrorNum, msg *C.char) {
+	installErrorHandlerOnce.Do(func() {
+		C.CPLSetErrorHandler(C.goCPLErrorHandlerProxy())
+	})
+	if handler, ok := errorHandler.Load().(ErrorHandler); ok && handler != nil {
+		handler(err, num, C.GoString(msg))
+	}
 }
 
 /* -------------------------------------------------------------------- */
@@ -44,6 +61,14 @@ var (
 	ErrFatal   = errors.New("Fatal Error")
 	ErrIllegal = errors.New("Illegal Error")
 )
+
+// ErrorHandler models a callback for error messages.
+type ErrorHandler func(C.CPLErr, C.CPLErrorNum, string)
+
+// InstallErrorHandler installs eh as the current error handler.
+func InstallErrorHandler(eh ErrorHandler) {
+	errorHandler.Store(eh)
+}
 
 // Error handling.  The following is bare-bones, and needs to be replaced with something more useful.
 func (err C.CPLErr) Err() error {

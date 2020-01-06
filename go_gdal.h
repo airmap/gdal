@@ -9,10 +9,15 @@
 #include <gdal_alg.h>
 #include <gdalwarper.h>
 #include <cpl_conv.h>
+#include <cpl_error.h>
 #include <ogr_srs_api.h>
 
 // transform GDALProgressFunc to go func
 GDALProgressFunc goGDALProgressFuncProxyB();
+
+// goCPLErrorHandlerProxy returns a CPLErrorHandler that calls
+// back into Go code.
+CPLErrorHandler goCPLErrorHandlerProxy();
 
 #endif // GO_GDAL_H_
 
