@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"unsafe"
 )
@@ -23,20 +22,17 @@ var (
 	_ = fmt.Println
 
 	errorHandler            atomic.Value
-	installErrorHandlerOnce sync.Once
 )
 
 func init() {
 	C.GDALAllRegister()
+	C.CPLSetErrorHandler(C.goCPLErrorHandlerProxy())
 }
 
 //export cplErrorHandler
 func cplErrorHandler(err C.CPLErr, num C.CPLErrorNum, msg *C.char) {
-	installErrorHandlerOnce.Do(func() {
-		C.CPLSetErrorHandler(C.goCPLErrorHandlerProxy())
-	})
 	if handler, ok := errorHandler.Load().(ErrorHandler); ok && handler != nil {
-		handler(err, num, C.GoString(msg))
+		handler(ErrorLevel(err), ErrorNumber(num), C.GoString(msg))
 	}
 }
 
@@ -60,10 +56,35 @@ var (
 	ErrFailure = errors.New("Failure Error")
 	ErrFatal   = errors.New("Fatal Error")
 	ErrIllegal = errors.New("Illegal Error")
+
+	ErrorLevelNone    = ErrorLevel(C.CE_None)
+	ErrorLevelDebug   = ErrorLevel(C.CE_Debug)
+	ErrorLevelWarning = ErrorLevel(C.CE_Warning)
+	ErrorLevelFailure = ErrorLevel(C.CE_Failure)
+	ErrorLevelFatal   = ErrorLevel(C.CE_Fatal)
+
+	ErrorNumberNone            = ErrorNumber(C.CPLE_None)
+	ErrorNumberAppDefined      = ErrorNumber(C.CPLE_AppDefined)
+	ErrorNumberOutOfMemory     = ErrorNumber(C.CPLE_OutOfMemory)
+	ErrorNumberFileIO          = ErrorNumber(C.CPLE_FileIO)
+	ErrorNumberOpenFailed      = ErrorNumber(C.CPLE_OpenFailed)
+	ErrorNumberIllegalArg      = ErrorNumber(C.CPLE_IllegalArg)
+	ErrorNumberNotSupported    = ErrorNumber(C.CPLE_NotSupported)
+	ErrorNumberAssertionFailed = ErrorNumber(C.CPLE_AssertionFailed)
+	ErrorNumberNoWriteAccess   = ErrorNumber(C.CPLE_NoWriteAccess)
+	ErrorNumberUserInterrupt   = ErrorNumber(C.CPLE_UserInterrupt)
+	ErrorNumberObjectNull      = ErrorNumber(C.CPLE_ObjectNull)
+	ErrorNumberHTTPResponse    = ErrorNumber(C.CPLE_HttpResponse)
 )
 
+// ErrorLevel describes the urgency of an error.
+type ErrorLevel int
+
+// ErrorNumber provides a classification of an error.
+type ErrorNumber int
+
 // ErrorHandler models a callback for error messages.
-type ErrorHandler func(C.CPLErr, C.CPLErrorNum, string)
+type ErrorHandler func(ErrorLevel, ErrorNumber, string)
 
 // InstallErrorHandler installs eh as the current error handler.
 func InstallErrorHandler(eh ErrorHandler) {
