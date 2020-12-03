@@ -29,6 +29,7 @@ func init() {
 type GeometryType uint32
 
 const (
+	GT_Null                  = 4294967295
 	GT_Unknown               = GeometryType(C.wkbUnknown)
 	GT_Point                 = GeometryType(C.wkbPoint)
 	GT_LineString            = GeometryType(C.wkbLineString)
@@ -1352,6 +1353,10 @@ type Layer struct {
 	cval C.OGRLayerH
 }
 
+func (layer Layer) IsNull() bool {
+	return layer.cval == nil
+}
+
 // Return the layer name
 func (layer Layer) Name() string {
 	name := C.OGR_L_GetName(layer.cval)
@@ -1569,19 +1574,19 @@ type DataSource struct {
 }
 
 // Open a file / data source with one of the registered drivers
-func OpenDataSource(name string, update int) DataSource {
+func OpenDataSource(name string, update int) (DataSource, bool) {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
 	ds := C.OGROpen(cName, C.int(update), nil)
-	return DataSource{ds}
+	return DataSource{ds}, ds != nil
 }
 
 // Open a shared file / data source with one of the registered drivers
-func OpenSharedDataSource(name string, update int) DataSource {
+func OpenSharedDataSource(name string, update int) (DataSource, bool) {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
 	ds := C.OGROpenShared(cName, C.int(update), nil)
-	return DataSource{ds}
+	return DataSource{ds}, ds != nil
 }
 
 // Drop a reference to this datasource and destroy if reference is zero
@@ -1711,7 +1716,6 @@ func (ds DataSource) ExecuteSQL(sql string, filter Geometry, dialect string) Lay
 	defer C.free(unsafe.Pointer(cSQL))
 	cDialect := C.CString(dialect)
 	defer C.free(unsafe.Pointer(cDialect))
-
 	layer := C.OGR_DS_ExecuteSQL(ds.cval, cSQL, filter.cval, cDialect)
 	return Layer{layer}
 }
