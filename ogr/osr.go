@@ -15,6 +15,14 @@ import (
 	"unsafe"
 )
 
+type AxisMappingStrategy uint32
+
+const (
+	OAMS_TRADITIONAL_GIS_ORDER = AxisMappingStrategy(C.OAMS_TRADITIONAL_GIS_ORDER)
+	OAMS_AUTHORITY_COMPLIANT   = AxisMappingStrategy(C.OAMS_AUTHORITY_COMPLIANT)
+	OAMS_CUSTOM                = AxisMappingStrategy(C.OAMS_CUSTOM)
+)
+
 /* -------------------------------------------------------------------- */
 /*      Spatial reference functions.                                    */
 /* -------------------------------------------------------------------- */
@@ -590,6 +598,14 @@ func (sr SpatialReference) NormalizedProjectionParameter(
 	var cErr C.OGRErr
 	value := C.OSRGetProjParm(sr.cval, cName, C.double(defaultValue), &cErr)
 	return float64(value), cErr.Err()
+}
+
+func (sr SpatialReference) GetAxisMappingStrategy() AxisMappingStrategy {
+	return AxisMappingStrategy(C.OSRGetAxisMappingStrategy(sr.cval))
+}
+
+func (sr SpatialReference) SetAxisMappingStrategy(ams AxisMappingStrategy) {
+	C.OSRSetAxisMappingStrategy(sr.cval, C.OSRAxisMappingStrategy(ams))
 }
 
 // Set UTM projection definition
