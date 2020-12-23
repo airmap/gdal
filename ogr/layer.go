@@ -18,6 +18,7 @@ type Layer struct {
 	cval C.OGRLayerH
 }
 
+// test for null geometry
 func (layer Layer) IsNull() bool {
 	return layer.cval == nil
 }
@@ -49,6 +50,20 @@ func (layer Layer) SetSpatialFilter(filter Geometry) {
 func (layer Layer) SetSpatialFilterRect(minX, minY, maxX, maxY float64) {
 	C.OGR_L_SetSpatialFilterRect(
 		layer.cval,
+		C.double(minX), C.double(minY), C.double(maxX), C.double(maxY),
+	)
+}
+
+// Set a new spatial filter for this layer and field
+func (layer Layer) SetSpatialFilterEx(index int, filter Geometry) {
+	C.OGR_L_SetSpatialFilterEx(layer.cval, C.int(index), filter.cval)
+}
+
+// Set a new rectangular spatial filter for this layer
+func (layer Layer) SetSpatialFilterRectEx(index int, minX, minY, maxX, maxY float64) {
+	C.OGR_L_SetSpatialFilterRectEx(
+		layer.cval,
+		C.int(index),
 		C.double(minX), C.double(minY), C.double(maxX), C.double(maxY),
 	)
 }
@@ -112,6 +127,14 @@ func (layer Layer) SpatialReference() SpatialReference {
 	return SpatialReference{sr}
 }
 
+// Gets the index for a field name
+func (layer Layer) FindFieldIndex(field string, exactMatch bool) int {
+	cString := C.CString(field)
+	defer C.free(unsafe.Pointer(cString))
+	index := C.OGR_L_FindFieldIndex(layer.cval, cString, BoolToCInt(exactMatch))
+	return int(index)
+}
+
 // Fetch the feature count for this layer
 func (layer Layer) FeatureCount(force bool) (count int, ok bool) {
 	count = int(C.OGR_L_GetFeatureCount(layer.cval, BoolToCInt(force)))
@@ -121,6 +144,12 @@ func (layer Layer) FeatureCount(force bool) (count int, ok bool) {
 // Fetch the extent of this layer
 func (layer Layer) Extent(force bool) (env Envelope, err error) {
 	err = C.OGR_L_GetExtent(layer.cval, &env.cval, BoolToCInt(force)).Err()
+	return
+}
+
+// Fetch the extent of this layer on the spacified geometry field
+func (layer Layer) ExtentEx(index int, force bool) (env Envelope, err error) {
+	err = C.OGR_L_GetExtentEx(layer.cval, C.int(index), &env.cval, BoolToCInt(force)).Err()
 	return
 }
 
@@ -136,6 +165,11 @@ func (layer Layer) TestCapability(capability string) bool {
 func (layer Layer) CreateField(fd FieldDefinition, approxOK bool) error {
 	return C.OGR_L_CreateField(layer.cval, fd.cval, BoolToCInt(approxOK)).Err()
 }
+
+// Create a new geometry field on a layer
+//func (layer Layer) CreateGeomField(fd FieldDefinition, approxOK bool) error {
+//	return C.OGR_L_CreateField(layer.cval, fd.cval, BoolToCInt(approxOK)).Err()
+//}
 
 // Delete a field from the layer
 func (layer Layer) DeleteField(index int) error {
@@ -158,16 +192,19 @@ func (layer Layer) AlterFieldDefn(index int, newDefn FieldDefinition, flags int)
 }
 
 // Begin a transation on data sources which support it
+// Note: as of GDAL 2.0, use of this API is discouraged when the dataset offers dataset level transaction with GDALDataset::StartTransaction().
 func (layer Layer) StartTransaction() error {
 	return C.OGR_L_StartTransaction(layer.cval).Err()
 }
 
 // Commit a transaction on data sources which support it
+// Note: as of GDAL 2.0, use of this API is discouraged when the dataset offers dataset level transaction with GDALDataset::StartTransaction().
 func (layer Layer) CommitTransaction() error {
 	return C.OGR_L_CommitTransaction(layer.cval).Err()
 }
 
 // Roll back the current transaction on data sources which support it
+// Note: as of GDAL 2.0, use of this API is discouraged when the dataset offers dataset level transaction with GDALDataset::StartTransaction().
 func (layer Layer) RollbackTransaction() error {
 	return C.OGR_L_RollbackTransaction(layer.cval).Err()
 }

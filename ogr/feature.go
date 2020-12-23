@@ -102,11 +102,35 @@ func (feature Feature) UnnsetField(index int) {
 	C.OGR_F_UnsetField(feature.cval, C.int(index))
 }
 
+// Test if a field is null.
+func (feature Feature) IsFieldNull(index int) bool {
+	isnull := C.OGR_F_IsFieldNull(feature.cval, C.int(index))
+	return int(isnull) == 1
+}
+
+// Test if a field is set and not null.
+func (feature Feature) IsFieldSetAndNotNull(index int) bool {
+	i := C.OGR_F_IsFieldSetAndNotNull(feature.cval, C.int(index))
+	return int(i) == 1
+}
+
+// Clear a field, marking it as null.
+func (feature Feature) SetFieldNull(index int) {
+	C.OGR_F_SetFieldNull(feature.cval, C.int(index))
+}
+
 // Fetch a reference to the internal field value
 func (feature Feature) RawField(index int) Field {
 	field := C.OGR_F_GetRawFieldRef(feature.cval, C.int(index))
 	return Field{field}
 }
+
+// since the functions below are not recommended for client code
+// they are not being implemented
+// int OGR_RawField_IsUnset(constOGRField*)
+// int OGR_RawField_IsNull(constOGRField*)
+// void OGR_RawField_SetUnset(OGRField*)
+// void OGR_RawField_SetNull(OGRField*)
 
 // Fetch field value as integer
 func (feature Feature) FieldAsInteger(index int) int {
@@ -216,6 +240,8 @@ func (feature Feature) FieldAsDateTime(index int) (time.Time, bool) {
 	return t, success != 0
 }
 
+//int OGR_F_GetFieldAsDateTimeEx(OGRFeatureHhFeat, int iField, int *pnYear, int *pnMonth, int *pnDay, int *pnHour, int *pnMinute, float *pfSecond, int *pnTZFlag)
+
 // Set field to integer value
 func (feature Feature) SetFieldInteger(index, value int) {
 	C.OGR_F_SetFieldInteger(feature.cval, C.int(index), C.int(value))
@@ -315,6 +341,14 @@ func (feature Feature) SetFieldDateTime(index int, dt time.Time) {
 	)
 }
 
+//void OGR_F_SetFieldDateTimeEx(OGRFeatureH, int, int, int, int, int, int, float, int)
+//int OGR_F_GetGeomFieldCount(OGRFeatureHhFeat)
+//OGRGeomFieldDefnHOGR_F_GetGeomFieldDefnRef(OGRFeatureHhFeat, int iField)
+//int OGR_F_GetGeomFieldIndex(OGRFeatureHhFeat, const char *pszName)
+//OGRGeometryHOGR_F_GetGeomFieldRef(OGRFeatureHhFeat, int iField)
+//OGRErrOGR_F_SetGeomFieldDirectly(OGRFeatureHhFeat, int iField, OGRGeometryHhGeom)
+//OGRErrOGR_F_SetGeomField(OGRFeatureHhFeat, int iField, OGRGeometryHhGeom)
+
 // Fetch feature indentifier
 func (feature Feature) FID() int64 {
 	fid := C.OGR_F_GetFID(feature.cval)
@@ -359,3 +393,10 @@ func (feature Feature) SetStyleString(style string) {
 func (feature Feature) IsNull() bool {
 	return feature.cval == nil
 }
+
+//const char *OGR_F_GetNativeData(OGRFeatureH)
+//void OGR_F_SetNativeData(OGRFeatureH, const char*)
+//const char *OGR_F_GetNativeMediaType(OGRFeatureH)
+//void OGR_F_SetNativeMediaType(OGRFeatureH, const char*)
+//void OGR_F_FillUnsetWithDefault(OGRFeatureHhFeat, int bNotNullableOnly, char **papszOptions)
+//int OGR_F_Validate(OGRFeatureH, int nValidateFlags, int bEmitError)

@@ -99,7 +99,6 @@ func (dataType DataType) Union(dataTypeB DataType) DataType {
 	)
 }
 
-//Safe array conversion
 func IntSliceToCInt(data []int) []C.int {
 	sliceSz := len(data)
 	result := make([]C.int, sliceSz)
