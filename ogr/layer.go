@@ -167,9 +167,9 @@ func (layer Layer) CreateField(fd FieldDefinition, approxOK bool) error {
 }
 
 // Create a new geometry field on a layer
-//func (layer Layer) CreateGeomField(fd FieldDefinition, approxOK bool) error {
-//	return C.OGR_L_CreateField(layer.cval, fd.cval, BoolToCInt(approxOK)).Err()
-//}
+func (layer Layer) CreateGeomField(fd FieldDefinition, approxOK bool) error {
+	return C.OGR_L_CreateField(layer.cval, fd.cval, BoolToCInt(approxOK)).Err()
+}
 
 // Delete a field from the layer
 func (layer Layer) DeleteField(index int) error {

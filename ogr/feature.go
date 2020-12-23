@@ -341,13 +341,61 @@ func (feature Feature) SetFieldDateTime(index int, dt time.Time) {
 	)
 }
 
-//void OGR_F_SetFieldDateTimeEx(OGRFeatureH, int, int, int, int, int, int, float, int)
-//int OGR_F_GetGeomFieldCount(OGRFeatureHhFeat)
-//OGRGeomFieldDefnHOGR_F_GetGeomFieldDefnRef(OGRFeatureHhFeat, int iField)
-//int OGR_F_GetGeomFieldIndex(OGRFeatureHhFeat, const char *pszName)
-//OGRGeometryHOGR_F_GetGeomFieldRef(OGRFeatureHhFeat, int iField)
-//OGRErrOGR_F_SetGeomFieldDirectly(OGRFeatureHhFeat, int iField, OGRGeometryHhGeom)
-//OGRErrOGR_F_SetGeomField(OGRFeatureHhFeat, int iField, OGRGeometryHhGeom)
+// Set field as date / time
+func (feature Feature) SetFieldDateTimeEx(index int, dt time.Time) {
+	C.OGR_F_SetFieldDateTimeEx(
+		feature.cval,
+		C.int(index),
+		C.int(dt.Year()),
+		C.int(dt.Month()),
+		C.int(dt.Day()),
+		C.int(dt.Hour()),
+		C.int(dt.Minute()),
+		C.float(float32(dt.Second())+(float32(dt.Nanosecond())/1000000000.0)),
+		C.int(1),
+	)
+}
+
+// Fetch number of geometry fields on this feature This will always be the same as the geometry field count for the OGRFeatureDefn.
+func (feature Feature) GeometryFieldCount() int {
+	count := C.OGR_F_GetGeomFieldCount(feature.cval)
+	return int(count)
+}
+
+// Fetch definition for this geometry field.
+// index: the field to fetch, from 0 to GetGeomFieldCount()-1.
+func (feature Feature) GeometryFieldDefition(index int) GeomFieldDefinition {
+	gfd := C.OGR_F_GetGeomFieldDefnRef(feature.cval, C.int(index))
+	return GeomFieldDefinition{gfd}
+}
+
+// Fetch the geometry field index given geometry field name.
+func (feature Feature) GeometryFieldIndex(name string) int {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+	index := C.OGR_F_GetGeomFieldIndex(feature.cval, cName)
+	return int(index)
+}
+
+// Fetch a handle to feature geometry.
+func (feature Feature) GeometryField(index int) Geometry {
+	geom := C.OGR_F_GetGeomFieldRef(feature.cval, C.int(index))
+	return Geometry{geom}
+}
+
+// Set feature geometry of a specified geometry field.
+// This function updates the features geometry, and operate exactly as SetGeomField(),
+//  except that this function assumes ownership of the passed geometry (even in case of failure of that function).
+func (feature Feature) SetGeometryFieldDirectly(index int, geom Geometry) error {
+	return C.OGR_F_SetGeomFieldDirectly(feature.cval, C.int(index), geom.cval).Err()
+}
+
+// Set feature geometry of a specified geometry field.
+// This function updates the features geometry, and operate exactly as SetGeometryDirectly(),
+//  except that this function does not assume ownership of the passed geometry, but instead makes a copy of it.
+func (feature Feature) SetGeometryField(index int, geom Geometry) error {
+	return C.OGR_F_SetGeomField(feature.cval, C.int(index), geom.cval).Err()
+}
 
 // Fetch feature indentifier
 func (feature Feature) FID() int64 {
@@ -386,17 +434,46 @@ func (feature Feature) StlyeString() string {
 // Set style string for this feature
 func (feature Feature) SetStyleString(style string) {
 	cStyle := C.CString(style)
+	defer C.free(unsafe.Pointer(cStyle))
 	C.OGR_F_SetStyleStringDirectly(feature.cval, cStyle)
+}
+
+// Returns the native data for the feature.
+func (feature Feature) NativeData() string {
+	nd := C.OGR_F_GetNativeData(feature.cval)
+	return C.GoString(nd)
+}
+
+func (feature Feature) SetNativeData(nativeData string) {
+	nd := C.CString(nativeData)
+	defer C.free(unsafe.Pointer(nd))
+	C.OGR_F_SetNativeData(feature.cval, nd)
+}
+
+func (feature Feature) NativeMediaType() string {
+	mt := C.OGR_F_GetNativeMediaType(feature.cval)
+	return C.GoString(mt)
+}
+
+func (feature Feature) SetNativeMediaType(mediatype string) {
+	mt := C.CString(mediatype)
+	defer C.free(unsafe.Pointer(mt))
+	C.OGR_F_SetNativeMediaType(feature.cval, mt)
+}
+
+// Fill unset fields with default values that might be defined.
+// note: papszOptions: unused currently. Must be set to NULL.
+func (feature Feature) FillUnsetWithDefault(notNullableOnly bool) {
+	var papszOptions **C.char = nil
+	C.OGR_F_FillUnsetWithDefault(feature.cval, BoolToCInt(notNullableOnly), papszOptions)
+}
+
+func (feature Feature) Validate(validateFlags int, emitError int) int {
+	v := C.OGR_F_Validate(feature.cval, C.int(validateFlags), C.int(emitError))
+	return int(v)
 }
 
 // Returns true if this contains a null pointer
 func (feature Feature) IsNull() bool {
 	return feature.cval == nil
 }
-
-//const char *OGR_F_GetNativeData(OGRFeatureH)
-//void OGR_F_SetNativeData(OGRFeatureH, const char*)
-//const char *OGR_F_GetNativeMediaType(OGRFeatureH)
-//void OGR_F_SetNativeMediaType(OGRFeatureH, const char*)
-//void OGR_F_FillUnsetWithDefault(OGRFeatureHhFeat, int bNotNullableOnly, char **papszOptions)
-//int OGR_F_Validate(OGRFeatureH, int nValidateFlags, int bEmitError)
