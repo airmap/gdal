@@ -21,7 +21,7 @@ import (
 var (
 	_ = fmt.Println
 
-	errorHandler            atomic.Value
+	errorHandler atomic.Value
 )
 
 func init() {
@@ -108,22 +108,6 @@ func (err C.CPLErr) Err() error {
 	return ErrIllegal
 }
 
-func (err C.OGRErr) Err() error {
-	switch err {
-	case 0:
-		return nil
-	case 1:
-		return ErrDebug
-	case 2:
-		return ErrWarning
-	case 3:
-		return ErrFailure
-	case 4:
-		return ErrFailure
-	}
-	return ErrIllegal
-}
-
 // Pixel data types
 type DataType int
 
@@ -161,7 +145,6 @@ func (dataType DataType) Union(dataTypeB DataType) DataType {
 	)
 }
 
-//Safe array conversion
 func IntSliceToCInt(data []int) []C.int {
 	sliceSz := len(data)
 	result := make([]C.int, sliceSz)
@@ -173,6 +156,14 @@ func IntSliceToCInt(data []int) []C.int {
 
 //Safe array conversion
 func CIntSliceToInt(data []C.int) []int {
+	sliceSz := len(data)
+	result := make([]int, sliceSz)
+	for i := 0; i < sliceSz; i++ {
+		result[i] = int(data[i])
+	}
+	return result
+}
+func CUIntBigSliceToInt(data []C.GUIntBig) []int {
 	sliceSz := len(data)
 	result := make([]int, sliceSz)
 	for i := 0; i < sliceSz; i++ {
@@ -219,6 +210,17 @@ const (
 	Read = RWFlag(C.GF_Read)
 	// Write data
 	Write = RWFlag(C.GF_Write)
+)
+
+type OpenFlag uint
+
+const (
+	OFReadOnly      = OpenFlag(C.GDAL_OF_READONLY)
+	OFUpdate        = OpenFlag(C.GDAL_OF_UPDATE)
+	OFShared        = OpenFlag(C.GDAL_OF_SHARED)
+	OFVector        = OpenFlag(C.GDAL_OF_VECTOR)
+	OFRaster        = OpenFlag(C.GDAL_OF_RASTER)
+	OFVerbose_Error = OpenFlag(C.GDAL_OF_VERBOSE_ERROR)
 )
 
 // Types of color interpretation for raster bands.
@@ -313,7 +315,23 @@ type AsyncReader struct {
 }
 
 type ColorEntry struct {
-	cval *C.GDALColorEntry
+	cval C.GDALColorEntry
+}
+
+func (ce *ColorEntry) Set(c1, c2, c3, c4 uint) {
+	ce.cval.c1 = C.short(c1)
+	ce.cval.c2 = C.short(c2)
+	ce.cval.c3 = C.short(c3)
+	ce.cval.c4 = C.short(c4)
+}
+
+func (ce *ColorEntry) Get() (c1, c2, c3, c4 uint8) {
+
+	return *(*uint8)(unsafe.Pointer(&ce.cval.c1)), *(*uint8)(unsafe.Pointer(&ce.cval.c2)), *(*uint8)(unsafe.Pointer(&ce.cval.c3)), *(*uint8)(unsafe.Pointer(&ce.cval.c4))
+}
+
+type VSILFILE struct {
+	cval *C.VSILFILE
 }
 
 /* -------------------------------------------------------------------- */
@@ -491,6 +509,51 @@ func Open(filename string, access Access) (Dataset, error) {
 	return Dataset{dataset}, nil
 }
 
+// Open an existing dataset
+func OpenEx(filename string, flags OpenFlag, allowedDrivers []string,
+	openOptions []string, siblingFiles []string) (Dataset, error) {
+	cFilename := C.CString(filename)
+	defer C.free(unsafe.Pointer(cFilename))
+
+	var driversA, ooptionsA, siblingsA **C.char
+	if allowedDrivers != nil {
+		length := len(allowedDrivers)
+		drivers := make([]*C.char, length+1)
+		for i := 0; i < length; i++ {
+			drivers[i] = C.CString(allowedDrivers[i])
+			defer C.free(unsafe.Pointer(drivers[i]))
+		}
+		drivers[length] = (*C.char)(unsafe.Pointer(nil))
+		driversA = (**C.char)(unsafe.Pointer(&drivers[0]))
+	}
+	if openOptions != nil {
+		length := len(openOptions)
+		ooptions := make([]*C.char, length+1)
+		for i := 0; i < length; i++ {
+			ooptions[i] = C.CString(openOptions[i])
+			defer C.free(unsafe.Pointer(ooptions[i]))
+		}
+		ooptions[length] = (*C.char)(unsafe.Pointer(nil))
+		ooptionsA = (**C.char)(unsafe.Pointer(&ooptions[0]))
+	}
+	if siblingFiles != nil {
+		length := len(siblingFiles)
+		siblings := make([]*C.char, length+1)
+		for i := 0; i < length; i++ {
+			siblings[i] = C.CString(siblingFiles[i])
+			defer C.free(unsafe.Pointer(siblings[i]))
+		}
+		siblings[length] = (*C.char)(unsafe.Pointer(nil))
+		siblingsA = (**C.char)(unsafe.Pointer(&siblings[0]))
+	}
+
+	dataset := C.GDALOpenEx(cFilename, C.uint(flags), driversA, ooptionsA, siblingsA)
+	if dataset == nil {
+		return Dataset{nil}, fmt.Errorf("Error: dataset '%s' openEx error", filename)
+	}
+	return Dataset{dataset}, nil
+}
+
 // Open a shared existing dataset
 func OpenShared(filename string, access Access) Dataset {
 	cFilename := C.CString(filename)
@@ -621,6 +684,27 @@ func (object MajorObject) Metadata(domain string) []string {
 	panic("not implemented!")
 	return nil
 }
+func (dataset *Dataset) Metadata(domain string) []string {
+	cDomain := C.CString(domain)
+	defer C.free(unsafe.Pointer(cDomain))
+
+	p := C.GDALGetMetadata(
+		C.GDALMajorObjectH(unsafe.Pointer(dataset.cval)),
+		cDomain,
+	)
+	var strings []string
+	q := uintptr(unsafe.Pointer(p))
+	for {
+		p = (**C.char)(unsafe.Pointer(q))
+		if p == nil {
+			break
+		}
+		strings = append(strings, C.GoString(*p))
+		q += unsafe.Sizeof(q)
+	}
+
+	return strings
+}
 
 // Set metadata
 func (object MajorObject) SetMetadata(metadata []string, domain string) {
@@ -640,7 +724,7 @@ func (object MajorObject) SetMetadataItem(name, value, domain string) {
 	return
 }
 
-// TODO: Make korrekt class hirerarchy via interfaces
+// TODO: Make correct class hirerarchy via interfaces
 
 func (rasterBand *RasterBand) SetMetadataItem(name, value, domain string) error {
 	c_name := C.CString(name)
@@ -678,6 +762,35 @@ func (object *Dataset) SetMetadataItem(name, value, domain string) error {
 
 // Fetch single metadata item.
 func (object *Driver) MetadataItem(name, domain string) string {
+	c_name := C.CString(name)
+	defer C.free(unsafe.Pointer(c_name))
+
+	c_domain := C.CString(domain)
+	defer C.free(unsafe.Pointer(c_domain))
+
+	return C.GoString(
+		C.GDALGetMetadataItem(
+			C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
+			c_name, c_domain,
+		),
+	)
+}
+func (object *Dataset) MetadataItem(name, domain string) string {
+	c_name := C.CString(name)
+	defer C.free(unsafe.Pointer(c_name))
+
+	c_domain := C.CString(domain)
+	defer C.free(unsafe.Pointer(c_domain))
+
+	return C.GoString(
+		C.GDALGetMetadataItem(
+			C.GDALMajorObjectH(unsafe.Pointer(object.cval)),
+			c_name, c_domain,
+		),
+	)
+}
+
+func (object *RasterBand) MetadataItem(name, domain string) string {
 	c_name := C.CString(name)
 	defer C.free(unsafe.Pointer(c_name))
 
@@ -796,18 +909,7 @@ func (dataset Dataset) AutoCreateWarpedVRT(srcWKT, dstWKT string, resampleAlg Re
 // Unimplemented: GDALBeginAsyncReader
 // Unimplemented: GDALEndAsyncReader
 
-// Read / write a region of image data from multiple bands
-func (dataset Dataset) IO(
-	rwFlag RWFlag,
-	xOff, yOff, xSize, ySize int,
-	buffer interface{},
-	bufXSize, bufYSize int,
-	bandCount int,
-	bandMap []int,
-	pixelSpace, lineSpace, bandSpace int,
-) error {
-	var dataType DataType
-	var dataPtr unsafe.Pointer
+func determineBufferType(buffer interface{}) (dataType DataType, dataPtr unsafe.Pointer, err error) {
 	switch data := buffer.(type) {
 	case []int8:
 		dataType = Byte
@@ -834,7 +936,24 @@ func (dataset Dataset) IO(
 		dataType = Float64
 		dataPtr = unsafe.Pointer(&data[0])
 	default:
-		return fmt.Errorf("Error: buffer is not a valid data type (must be a valid numeric slice)")
+		err = fmt.Errorf("error: buffer is not a valid data type (must be a valid numeric slice)")
+	}
+	return
+}
+
+// Read / write a region of image data from multiple bands
+func (dataset Dataset) IO(
+	rwFlag RWFlag,
+	xOff, yOff, xSize, ySize int,
+	buffer interface{},
+	bufXSize, bufYSize int,
+	bandCount int,
+	bandMap []int,
+	pixelSpace, lineSpace, bandSpace int,
+) error {
+	dataType, dataPtr, err := determineBufferType(buffer)
+	if err != nil {
+		return err
 	}
 
 	return C.GDALDatasetRasterIO(
@@ -1069,35 +1188,9 @@ func (rasterBand RasterBand) IO(
 	bufXSize, bufYSize int,
 	pixelSpace, lineSpace int,
 ) error {
-	var dataType DataType
-	var dataPtr unsafe.Pointer
-	switch data := buffer.(type) {
-	case []int8:
-		dataType = Byte
-		dataPtr = unsafe.Pointer(&data[0])
-	case []uint8:
-		dataType = Byte
-		dataPtr = unsafe.Pointer(&data[0])
-	case []int16:
-		dataType = Int16
-		dataPtr = unsafe.Pointer(&data[0])
-	case []uint16:
-		dataType = UInt16
-		dataPtr = unsafe.Pointer(&data[0])
-	case []int32:
-		dataType = Int32
-		dataPtr = unsafe.Pointer(&data[0])
-	case []uint32:
-		dataType = UInt32
-		dataPtr = unsafe.Pointer(&data[0])
-	case []float32:
-		dataType = Float32
-		dataPtr = unsafe.Pointer(&data[0])
-	case []float64:
-		dataType = Float64
-		dataPtr = unsafe.Pointer(&data[0])
-	default:
-		return fmt.Errorf("Error: buffer is not a valid data type (must be a valid numeric slice)")
+	dataType, dataPtr, err := determineBufferType(buffer)
+	if err != nil {
+		return err
 	}
 
 	return C.GDALRasterIO(
@@ -1346,7 +1439,7 @@ func (rasterBand RasterBand) FlushCache() {
 	C.GDALFlushRasterCache(rasterBand.cval)
 }
 
-// Histogram Compute raster
+// Compute raster histogram
 func (rasterBand RasterBand) Histogram(
 	min, max float64,
 	buckets int,
@@ -1358,7 +1451,7 @@ func (rasterBand RasterBand) Histogram(
 		progress, data,
 	}
 
-	histogram := make([]C.int, buckets)
+	histogram := make([]C.GUIntBig, buckets)
 
 	if err := C.GDALGetRasterHistogramEx(
 		rasterBand.cval,
@@ -1373,7 +1466,7 @@ func (rasterBand RasterBand) Histogram(
 	).Err(); err != nil {
 		return nil, err
 	} else {
-		return CIntSliceToInt(histogram), nil
+		return CUIntBigSliceToInt(histogram), nil
 	}
 }
 
@@ -1528,19 +1621,19 @@ func (ct ColorTable) EntryCount() int {
 // Fetch a color entry from table
 func (ct ColorTable) Entry(index int) ColorEntry {
 	entry := C.GDALGetColorEntry(ct.cval, C.int(index))
-	return ColorEntry{entry}
+	return ColorEntry{*entry}
 }
 
 // Unimplemented: EntryAsRGB
 
 // Set entry in color table
 func (ct ColorTable) SetEntry(index int, entry ColorEntry) {
-	C.GDALSetColorEntry(ct.cval, C.int(index), entry.cval)
+	C.GDALSetColorEntry(ct.cval, C.int(index), &entry.cval)
 }
 
 // Create color ramp
 func (ct ColorTable) CreateColorRamp(start, end int, startColor, endColor ColorEntry) {
-	C.GDALCreateColorRamp(ct.cval, C.int(start), startColor.cval, C.int(end), endColor.cval)
+	C.GDALCreateColorRamp(ct.cval, C.int(start), &startColor.cval, C.int(end), &endColor.cval)
 }
 
 /* ==================================================================== */
@@ -1729,4 +1822,120 @@ func GetCacheUsed() int {
 func FlushCacheBlock() bool {
 	flushed := C.GDALFlushCacheBlock()
 	return flushed != 0
+}
+
+/* ==================================================================== */
+/*      GDAL VSI Virtual File System                                    */
+/* ==================================================================== */
+
+// List VSI files
+func VSIReadDirRecursive(filename string) []string {
+	name := C.CString(filename)
+	defer C.free(unsafe.Pointer(name))
+
+	p := C.VSIReadDirRecursive(name)
+	var strings []string
+	q := uintptr(unsafe.Pointer(p))
+	for {
+		p = (**C.char)(unsafe.Pointer(q))
+		if *p == nil {
+			break
+		}
+		strings = append(strings, C.GoString(*p))
+		q += unsafe.Sizeof(q)
+	}
+
+	return strings
+}
+
+// Open file.
+func VSIFOpenL(fileName string, fileAccess string) (VSILFILE, error) {
+	cFileName := C.CString(fileName)
+	defer C.free(unsafe.Pointer(cFileName))
+	cFileAccess := C.CString(fileAccess)
+	defer C.free(unsafe.Pointer(cFileAccess))
+	file := C.VSIFOpenL(cFileName, cFileAccess)
+
+	if file == nil {
+		return VSILFILE{nil}, fmt.Errorf("Error: VSILFILE '%s' open error", fileName)
+	}
+	return VSILFILE{file}, nil
+}
+
+// Close file.
+func VSIFCloseL(file VSILFILE) {
+	C.VSIFCloseL(file.cval)
+	return
+}
+
+// Read bytes from file.
+func VSIFReadL(nSize, nCount int, file VSILFILE) []byte {
+	data := make([]byte, nSize*nCount)
+	p := unsafe.Pointer(&data[0])
+	C.VSIFReadL(p, C.size_t(nSize), C.size_t(nCount), file.cval)
+
+	return data
+}
+
+// Delete a file. This method goes through the VSIFileHandler virtualization and may work on
+// unusual filesystems such as in memory.
+func VSIUnlink(fileName string) error {
+	cFileName := C.CString(fileName)
+	defer C.free(unsafe.Pointer(cFileName))
+	deleted := C.VSIUnlink(cFileName)
+	if deleted != 0 {
+		return fmt.Errorf("Error: VSILFILE '%s' unlink error", fileName)
+	}
+	return nil
+}
+
+// Create a new directory with the indicated mode.
+// The mode is ignored on some platforms.
+// A reasonable default mode value would be 0666.
+// This method goes through the VSIFileHandler virtualization
+// and may work on unusual filesystems such as in memory.
+func VSIMkdir(dir string) error {
+	cDir := C.CString(dir)
+	defer C.free(unsafe.Pointer(cDir))
+	made := C.VSIMkdir(cDir, C.long(uint32(0666)))
+	if int(made) != 0 {
+		return fmt.Errorf("Error: VSILFILE '%s' mkdir error", dir)
+	}
+	return nil
+}
+
+// Create a directory and all its ancestors.
+func VSIMkdirRecursive(dir string) error {
+	cDir := C.CString(dir)
+	defer C.free(unsafe.Pointer(cDir))
+	made := C.VSIMkdirRecursive(cDir, C.long(uint32(0666)))
+	if int(made) != 0 {
+		return fmt.Errorf("Error: VSILFILE '%s' mkdir resursive error", dir)
+	}
+	return nil
+}
+
+// Deletes a directory object from the file system. On some systems the directory must be empty before it can be deleted.
+// This method goes through the VSIFileHandler virtualization and may work on unusual filesystems such as in memory.
+func VSIRmdir(dir string) error {
+	cDir := C.CString(dir)
+	defer C.free(unsafe.Pointer(cDir))
+	deleted := C.VSIRmdir(cDir)
+	if deleted != 0 {
+		return fmt.Errorf("Error: VSILFILE '%s' unlink error", dir)
+	}
+	return nil
+}
+
+// Delete a directory recursively.
+// Deletes a directory object and its content from the file system.
+// Starting with GDAL 3.1, /vsis3/ has an efficient implementation of this function.
+func VSIRmdirRecursive(dir string) error {
+	cDir := C.CString(dir)
+	defer C.free(unsafe.Pointer(cDir))
+	deleted := C.VSIRmdirRecursive(cDir)
+	if deleted != 0 {
+		return fmt.Errorf("Error: VSILFILE '%s' unlink error", dir)
+	}
+	return nil
 }
