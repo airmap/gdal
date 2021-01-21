@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/dewberry/gdal/ogr"
+	"github.com/airmap/gdal/ogr"
 )
 
 var _ = fmt.Println

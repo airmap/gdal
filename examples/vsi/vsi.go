@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dewberry/gdal"
+	"github.com/airmap/gdal"
 )
 
 func main() {

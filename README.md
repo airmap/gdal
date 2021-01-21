@@ -6,7 +6,7 @@ The gdal.go package provides a go wrapper for GDAL, the Geospatial Data Abstract
 
 ## Installation
 ```sh
-go get github.com/dewberry/gdal
+go get github.com/airmap/gdal
 ```
 
 ## Compatibility

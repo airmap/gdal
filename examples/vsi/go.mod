@@ -1,9 +1,9 @@
-module github.com/lukeroth/gdal/examples/vsi
+module github.com/airmap/gdal/examples/vsi
 
-go 1.13
+go 1.14
 
-replace github.com/dewberry/gdal => ../..
+replace github.com/airmap/gdal => ../..
 
 require (
-	github.com/dewberry/gdal v0.0.0-20201021153548-9bbc306059d3
+	github.com/airmap/gdal v0.0.0-20201021153548-9bbc306059d3
 )

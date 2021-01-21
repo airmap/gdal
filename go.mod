@@ -1,5 +1,5 @@
-module github.com/dewberry/gdal
+module github.com/airmap/gdal
 
-replace github.com/dewberry/gdal => /Users/rdcrlrsg/Projects/programming/go/src/github.com/dewberry/gdal
+replace github.com/airmap/gdal => /home/hibrid/go/src/github.com/airmap/gdal
 
 go 1.14
