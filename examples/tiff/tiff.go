@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-
 	"github.com/airmap/gdal"
+	"github.com/airmap/gdal/ogr"
 )
 
 func main() {
@@ -17,8 +17,7 @@ func main() {
 	fmt.Printf("Filename: %s\n", filename)
 
 	fmt.Printf("Allocating buffer\n")
-	var buffer [256 * 256]uint8
-	//	buffer := make([]uint8, 256 * 256)
+	buffer := make([]uint8, 256*256)
 
 	fmt.Printf("Computing values\n")
 	for x := 0; x < 256; x++ {
@@ -49,7 +48,7 @@ func main() {
 	defer dataset.Close()
 
 	fmt.Printf("Creating projection\n")
-	spatialRef := gdal.CreateSpatialReference("")
+	spatialRef := ogr.CreateSpatialReference("")
 
 	fmt.Printf("Setting EPSG code\n")
 	spatialRef.FromEPSG(3857)
