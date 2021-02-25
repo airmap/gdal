@@ -1,7 +1,5 @@
-module github.com/lukeroth/gdal/examples/tiff
+module github.com/airmap/gdal/examples/tiff
 
 go 1.13
 
-replace github.com/lukeroth/gdal => ../..
-
-require github.com/lukeroth/gdal v0.0.0-00010101000000-000000000000
+require github.com/airmap/gdal v0.0.5
